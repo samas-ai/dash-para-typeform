@@ -6,6 +6,7 @@ num dashboard. Next.js 15 (App Router) + Supabase, pronto para deploy na Vercel.
 - `POST /api/webhooks/typeform` — endpoint que o Typeform chama
 - `/` — lista de respostas, com busca e paginação
 - `/submissions/[id]` — detalhe de um envio, incluindo o payload cru
+- `/analise` — gráficos agregados por pergunta, com filtro de período e formulário
 
 ---
 
@@ -108,6 +109,33 @@ join form_submissions s on s.id = a.submission_id
 where a.field_ref = 'email'
 order by s.submitted_at desc;
 ```
+
+## A página de análise
+
+Cada tipo de pergunta ganha a forma que corresponde ao que se pode concluir dela:
+
+| Tipo no Typeform | O que aparece |
+| --- | --- |
+| Múltipla escolha, dropdown, sim/não | barras de frequência, ordenadas da mais escolhida |
+| Escala de opinião, nota, NPS | média/mediana/mín/máx **e** a distribuição, na ordem da escala |
+| Número | média, mediana, mínimo e máximo |
+| Texto, e-mail, telefone | quantas pessoas responderam e as últimas respostas |
+
+A seleção múltipla conta cada opção marcada, então os percentuais somam mais de
+100% — o denominador é "quantas pessoas responderam a pergunta", não "quantas
+marcações houve".
+
+**A análise por pergunta é sempre de um formulário só.** Formulários diferentes
+têm perguntas diferentes; somar tudo faria a mesma pergunta aparecer uma vez por
+formulário. A página abre já filtrada no formulário com mais envios, e a opção
+"Todos" mostra apenas o que dá para comparar entre formulários (o volume).
+
+Os gráficos são SVG e HTML gerados no servidor — sem biblioteca de charts e sem
+JavaScript no cliente. Todos usam **uma cor só**: o que o leitor faz aqui é
+comparar tamanhos, e nesse caso pintar cada barra de uma cor gastaria o canal de
+cor repetindo o que o comprimento já diz (além de criar um problema de
+daltonismo à toa). Todo valor também aparece escrito, e a linha do tempo tem uma
+versão em tabela, então nada depende de enxergar cor ou de passar o mouse.
 
 ## Detalhes de implementação
 
