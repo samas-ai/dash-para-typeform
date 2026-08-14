@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+@theme {
+  --color-canvas: #f7f7f8;
+  --color-surface: #ffffff;
+  --color-line: #e4e4e7;
+  --color-ink: #18181b;
+  --color-muted: #71717a;
+  --color-accent: #4f46e5;
+}
+
+/* As utilitárias geradas pelo @theme apontam para var(--color-*), então
+   redefinir as variáveis em :root já troca o tema inteiro. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-canvas: #0b0b0e;
+    --color-surface: #141418;
+    --color-line: #27272a;
+    --color-ink: #f4f4f5;
+    --color-muted: #a1a1aa;
+    --color-accent: #818cf8;
+  }
+}
+
+body {
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+}
