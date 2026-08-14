@@ -16,11 +16,18 @@ export default function RootLayout({
     <html lang="pt-BR">
       <body className="min-h-screen bg-canvas text-ink">
         <header className="border-b border-line bg-surface">
-          <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
+          <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-4">
             <Link href="/" className="text-sm font-semibold tracking-tight">
               Dashboard de respostas
             </Link>
-            <span className="text-xs text-muted">Typeform → Supabase</span>
+            <nav className="flex items-center gap-4 text-sm text-muted">
+              <Link href="/" className="transition-colors hover:text-ink">
+                Respostas
+              </Link>
+              <Link href="/analise" className="transition-colors hover:text-ink">
+                Análise
+              </Link>
+            </nav>
           </div>
         </header>
 

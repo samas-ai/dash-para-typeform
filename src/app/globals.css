@@ -7,6 +7,14 @@
   --color-ink: #18181b;
   --color-muted: #71717a;
   --color-accent: #4f46e5;
+
+  /* Gráficos: uma hue só. Todo gráfico aqui compara magnitude (contagem por
+     opção, envios por dia), e nesse caso a cor não carrega identidade — usar
+     paleta categórica só gastaria o canal de cor com informação que o
+     comprimento da barra já dá. Validado >= 3:1 contra as duas superfícies. */
+  --color-series: #2a78d6;
+  --color-grid: #e4e4e7;
+  --color-track: #eef2f7;
 }
 
 /* As utilitárias geradas pelo @theme apontam para var(--color-*), então
@@ -19,6 +27,12 @@
     --color-ink: #f4f4f5;
     --color-muted: #a1a1aa;
     --color-accent: #818cf8;
+
+    /* Mesma hue, degrau escolhido para a superfície escura — não é o claro
+       invertido automaticamente. */
+    --color-series: #3987e5;
+    --color-grid: #27272a;
+    --color-track: #1e232b;
   }
 }
 
