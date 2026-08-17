@@ -22,10 +22,10 @@ export default function RootLayout({
             </Link>
             <nav className="flex items-center gap-4 text-sm text-muted">
               <Link href="/" className="transition-colors hover:text-ink">
-                Respostas
-              </Link>
-              <Link href="/analise" className="transition-colors hover:text-ink">
                 Análise
+              </Link>
+              <Link href="/respostas" className="transition-colors hover:text-ink">
+                Respostas
               </Link>
             </nav>
           </div>

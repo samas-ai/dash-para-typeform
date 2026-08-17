@@ -6,7 +6,7 @@ import Link from "next/link";
  */
 export function SearchForm({ value }: { value?: string }) {
   return (
-    <form className="flex gap-2" action="/" method="get">
+    <form className="flex gap-2" action="/respostas" method="get">
       <input
         type="search"
         name="q"
@@ -22,7 +22,7 @@ export function SearchForm({ value }: { value?: string }) {
       </button>
       {value && (
         <Link
-          href="/"
+          href="/respostas"
           className="shrink-0 rounded-lg px-3 py-2 text-sm text-muted transition-colors hover:text-ink"
         >
           Limpar

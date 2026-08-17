@@ -4,9 +4,9 @@ Recebe o payload do webhook do Typeform, grava no Supabase e mostra as respostas
 num dashboard. Next.js 15 (App Router) + Supabase, pronto para deploy na Vercel.
 
 - `POST /api/webhooks/typeform` — endpoint que o Typeform chama
-- `/` — lista de respostas, com busca e paginação
+- `/` — análise: gráficos agregados por pergunta, com filtro de período e formulário
+- `/respostas` — lista de respostas, com busca e paginação
 - `/submissions/[id]` — detalhe de um envio, incluindo o payload cru
-- `/analise` — gráficos agregados por pergunta, com filtro de período e formulário
 
 ---
 
@@ -39,8 +39,8 @@ npm run webhook:test
 ```
 
 O script monta um payload no mesmo formato do Typeform, assina com o secret do
-`.env.local` e faz o POST. Se der `200`, atualize <http://localhost:3000> e a
-resposta estará lá.
+`.env.local` e faz o POST. Se der `200`, abra
+<http://localhost:3000/respostas> e a resposta estará lá.
 
 ## 3. Deploy na Vercel
 
@@ -78,6 +78,11 @@ No seu formulário, vá em **Connect → Webhooks → Add a webhook**:
 
 Salve, ative o webhook e envie uma resposta de teste no formulário. Ela deve
 aparecer no dashboard em segundos.
+
+O webhook é configurado **por formulário**, não por conta: cada formulário que
+você quiser acompanhar precisa do seu próprio cadastro de endpoint e secret. O
+dashboard lida com vários — o filtro de formulário aparece sozinho a partir do
+segundo.
 
 Para conferir contra produção sem preencher o formulário:
 

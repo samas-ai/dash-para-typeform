@@ -29,7 +29,10 @@ export default async function SubmissionPage({
 
   return (
     <div className="space-y-6">
-      <Link href="/" className="text-sm text-muted transition-colors hover:text-ink">
+      <Link
+        href="/respostas"
+        className="text-sm text-muted transition-colors hover:text-ink"
+      >
         ← Voltar
       </Link>
 

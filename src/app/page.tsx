@@ -1,133 +1,344 @@
 import Link from "next/link";
-import { SearchForm } from "@/components/search-form";
+import { BarList, TimelineChart } from "@/components/charts";
 import { SetupNotice } from "@/components/setup-notice";
 import { StatCard } from "@/components/stat-card";
-import { SubmissionCard } from "@/components/submission-card";
-import { formatRelative } from "@/lib/format";
-import { getStats, listSubmissions, type ListResult, type Stats } from "@/lib/queries";
+import {
+  getAnalytics,
+  getFormOptions,
+  isPeriod,
+  PERIODS,
+  type Analytics,
+  type Period,
+  type QuestionAggregate,
+} from "@/lib/analytics";
 
-// As respostas chegam por webhook a qualquer momento: nada de cache estático.
 export const dynamic = "force-dynamic";
 
-type SearchParams = { q?: string; page?: string };
+/** Valor do filtro que significa "não filtrar por formulário". */
+const ALL_FORMS = "todos";
 
-export default async function DashboardPage({
+type SearchParams = { periodo?: string; form?: string };
+
+export default async function AnalisePage({
   searchParams,
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  const { q, page } = await searchParams;
-  const search = q?.trim() || undefined;
+  const params = await searchParams;
+  const period: Period = isPeriod(params.periodo) ? params.periodo : "30d";
 
-  let stats: Stats;
-  let result: ListResult;
-
+  let formOptions: { formId: string; title: string; count: number }[];
   try {
-    [stats, result] = await Promise.all([
-      getStats(),
-      listSubmissions({ search, page: Number(page) || 1 }),
-    ]);
+    formOptions = await getFormOptions();
   } catch (error) {
     return <SetupNotice message={(error as Error).message} />;
   }
 
+  // Banco vazio é diferente de "nada no período": aqui o que falta é a primeira
+  // resposta, então a tela útil é a de configuração, não um gráfico vazio.
+  if (formOptions.length === 0) return <FirstRun />;
+
+  /**
+   * Cada formulário tem o seu próprio conjunto de perguntas, então somar as
+   * respostas de formulários diferentes não produz nada legível — a mesma
+   * pergunta apareceria uma vez por formulário. Por isso a página abre já
+   * filtrada no formulário mais movimentado, e a visão "Todos" mostra só o que
+   * faz sentido comparar entre formulários (volume), sem o detalhe por pergunta.
+   */
+  const selectedForm =
+    params.form === ALL_FORMS ? null : (params.form ?? formOptions[0]?.formId ?? null);
+
+  let analytics: Analytics;
+  try {
+    analytics = await getAnalytics({
+      period,
+      formId: selectedForm ?? undefined,
+    });
+  } catch (error) {
+    return <SetupNotice message={(error as Error).message} />;
+  }
+
+  const buildHref = (next: Partial<{ periodo: Period; form: string }>) => {
+    const query = new URLSearchParams();
+    const nextPeriod = next.periodo ?? period;
+    const nextForm = next.form ?? params.form;
+
+    if (nextPeriod !== "30d") query.set("periodo", nextPeriod);
+    if (nextForm) query.set("form", nextForm);
+
+    const string = query.toString();
+    return string ? `/?${string}` : "/";
+  };
+
+  const currentTitle = formOptions.find(
+    (form) => form.formId === selectedForm,
+  )?.title;
+
   return (
     <div className="space-y-6">
-      <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="Total" value={stats.total} />
-        <StatCard label="Últimas 24h" value={stats.last24h} />
-        <StatCard label="Últimos 7 dias" value={stats.last7d} />
-        <StatCard label="Mais recente" value={formatRelative(stats.latest)} />
-      </section>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Análise</h1>
+          {currentTitle && (
+            <p className="mt-0.5 text-sm text-muted">{currentTitle}</p>
+          )}
+        </div>
+        <Link
+          href="/respostas"
+          className="shrink-0 text-sm text-muted transition-colors hover:text-ink"
+        >
+          Ver respostas →
+        </Link>
+      </div>
 
-      <SearchForm value={search} />
+      {/* Uma linha de filtros acima de tudo que eles afetam — nunca um filtro
+          dentro de um card de gráfico. */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+        <Filter
+          label="Período"
+          options={Object.entries(PERIODS).map(([key, { label }]) => ({
+            key,
+            label,
+            href: buildHref({ periodo: key as Period }),
+            active: key === period,
+          }))}
+        />
 
-      {search && (
-        <p className="text-sm text-muted">
-          {result.total} {result.total === 1 ? "resultado" : "resultados"} para
-          &ldquo;{search}&rdquo;
+        {formOptions.length > 1 && (
+          <Filter
+            label="Formulário"
+            options={[
+              ...formOptions.map((form) => ({
+                key: form.formId,
+                label: form.title,
+                href: buildHref({ form: form.formId }),
+                active: selectedForm === form.formId,
+              })),
+              {
+                key: ALL_FORMS,
+                label: "Todos",
+                href: buildHref({ form: ALL_FORMS }),
+                active: selectedForm === null,
+              },
+            ]}
+          />
+        )}
+      </div>
+
+      {analytics.truncated && (
+        <p className="rounded-lg border border-line bg-surface px-4 py-3 text-sm text-muted">
+          Mostrando os 5.000 envios mais recentes do período. Os números abaixo
+          consideram só esse recorte.
         </p>
       )}
 
-      {result.submissions.length === 0 ? (
-        <EmptyState searching={Boolean(search)} />
+      {analytics.totalSubmissions === 0 ? (
+        <div className="rounded-xl border border-line bg-surface p-8 text-center">
+          <p className="text-sm font-medium">Nenhum envio neste período</p>
+          <p className="mt-2 text-sm text-muted">
+            Escolha um período maior ou aguarde as próximas respostas.
+          </p>
+        </div>
       ) : (
-        <section className="grid gap-3 sm:grid-cols-2">
-          {result.submissions.map((submission) => (
-            <SubmissionCard key={submission.id} submission={submission} />
-          ))}
-        </section>
-      )}
+        <>
+          <section className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <StatCard label="Envios no período" value={analytics.totalSubmissions} />
+            <StatCard
+              label="Tempo mediano"
+              value={formatSeconds(analytics.medianCompletionSeconds)}
+            />
+            <StatCard
+              label={selectedForm ? "Perguntas" : "Formulários"}
+              value={
+                selectedForm ? analytics.questions.length : analytics.forms.length
+              }
+            />
+          </section>
 
-      <Pagination page={result.page} pageCount={result.pageCount} search={search} />
+          <Card title="Envios por dia">
+            <TimelineChart data={analytics.timeline} />
+          </Card>
+
+          {selectedForm === null ? (
+            <Card title="Envios por formulário">
+              <BarList
+                items={analytics.forms.map((form) => ({
+                  label: form.title,
+                  count: form.count,
+                }))}
+                total={analytics.totalSubmissions}
+              />
+              <p className="mt-4 text-xs text-muted">
+                Escolha um formulário no filtro acima para ver o detalhe por
+                pergunta.
+              </p>
+            </Card>
+          ) : (
+            analytics.questions.map((question) => (
+              <QuestionCard
+                key={question.fieldId}
+                question={question}
+                totalSubmissions={analytics.totalSubmissions}
+              />
+            ))
+          )}
+        </>
+      )}
     </div>
   );
 }
 
-function EmptyState({ searching }: { searching: boolean }) {
-  if (searching) {
-    return (
-      <div className="rounded-xl border border-line bg-surface p-8 text-center text-sm text-muted">
-        Nenhuma resposta encontrada para essa busca.
-      </div>
-    );
-  }
-
+/** Nenhuma resposta jamais recebida: o próximo passo é ligar o webhook. */
+function FirstRun() {
   return (
     <div className="rounded-xl border border-line bg-surface p-8 text-center">
-      <p className="text-sm font-medium">Nenhuma resposta ainda</p>
-      <p className="mx-auto mt-2 max-w-md text-sm text-muted">
-        Aponte o webhook do Typeform para{" "}
-        <code className="text-ink">/api/webhooks/typeform</code> e envie uma resposta
-        de teste. Ela aparece aqui assim que chegar.
+      <p className="text-sm font-medium">Ainda não chegou nenhuma resposta</p>
+      <p className="mx-auto mt-2 max-w-lg text-sm text-muted">
+        No Typeform, abra <strong className="text-ink">Connect → Webhooks</strong> do
+        seu formulário e aponte o endpoint para{" "}
+        <code className="text-ink">/api/webhooks/typeform</code> deste domínio,
+        usando o mesmo secret configurado na Vercel. Os gráficos aparecem sozinhos
+        quando a primeira resposta chegar.
       </p>
     </div>
   );
 }
 
-function Pagination({
-  page,
-  pageCount,
-  search,
+function Filter({
+  label,
+  options,
 }: {
-  page: number;
-  pageCount: number;
-  search?: string;
+  label: string;
+  options: { key: string; label: string; href: string; active: boolean }[];
 }) {
-  if (pageCount <= 1) return null;
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs uppercase tracking-wide text-muted">{label}</span>
+      <div className="flex flex-wrap gap-1">
+        {options.map((option) => (
+          <Link
+            key={option.key}
+            href={option.href}
+            aria-current={option.active ? "page" : undefined}
+            className={
+              option.active
+                ? "rounded-lg border border-accent bg-surface px-2.5 py-1 text-sm font-medium"
+                : "rounded-lg border border-line bg-surface px-2.5 py-1 text-sm text-muted transition-colors hover:text-ink"
+            }
+          >
+            {option.label}
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-  const href = (target: number) => {
-    const params = new URLSearchParams();
-    if (search) params.set("q", search);
-    if (target > 1) params.set("page", String(target));
-    const query = params.toString();
-    return query ? `/?${query}` : "/";
-  };
+function Card({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-xl border border-line bg-surface p-4">
+      <h2 className="text-sm font-semibold">{title}</h2>
+      <div className="mt-4">{children}</div>
+    </section>
+  );
+}
 
-  const linkClass =
-    "rounded-lg border border-line bg-surface px-3 py-2 text-sm transition-colors hover:border-accent";
+function QuestionCard({
+  question,
+  totalSubmissions,
+}: {
+  question: QuestionAggregate;
+  totalSubmissions: number;
+}) {
+  return (
+    <section className="rounded-xl border border-line bg-surface p-4">
+      <div className="flex items-baseline justify-between gap-4">
+        <h2 className="text-sm font-semibold">{question.question}</h2>
+        <span className="shrink-0 text-xs text-muted">
+          {question.answered} de {totalSubmissions} responderam
+        </span>
+      </div>
+
+      <div className="mt-4">
+        {question.kind === "categorical" && (
+          <BarList items={question.options} total={question.answered} />
+        )}
+
+        {question.kind === "numeric" && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <StatCard label="Média" value={formatNumber(question.average)} />
+              <StatCard label="Mediana" value={formatNumber(question.median)} />
+              <StatCard label="Mínimo" value={formatNumber(question.min)} />
+              <StatCard label="Máximo" value={formatNumber(question.max)} />
+            </div>
+
+            {question.distribution && (
+              <BarList items={question.distribution} total={question.answered} />
+            )}
+          </div>
+        )}
+
+        {question.kind === "text" && (
+          <TextAnswers samples={question.samples} answered={question.answered} />
+        )}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Resposta aberta não agrega em gráfico — contar frases distintas só produziria
+ * uma barra de tamanho 1 por pessoa. Mostramos as últimas como amostra.
+ */
+function TextAnswers({
+  samples,
+  answered,
+}: {
+  samples: string[];
+  answered: number;
+}) {
+  if (samples.length === 0) {
+    return <p className="text-sm text-muted">Sem respostas no período.</p>;
+  }
 
   return (
-    <nav className="flex items-center justify-between">
-      {page > 1 ? (
-        <Link href={href(page - 1)} className={linkClass}>
-          ← Anterior
-        </Link>
-      ) : (
-        <span />
+    <div className="space-y-2">
+      <p className="text-xs text-muted">Últimas respostas</p>
+      <ul className="space-y-2">
+        {samples.map((sample, i) => (
+          <li key={i} className="border-l-2 border-line pl-3 text-sm text-ink/90">
+            {sample}
+          </li>
+        ))}
+      </ul>
+      {answered > samples.length && (
+        <p className="text-xs text-muted">
+          + {answered - samples.length} outras — veja em{" "}
+          <Link href="/respostas" className="underline">
+            respostas
+          </Link>
+          .
+        </p>
       )}
-
-      <span className="text-sm text-muted">
-        Página {page} de {pageCount}
-      </span>
-
-      {page < pageCount ? (
-        <Link href={href(page + 1)} className={linkClass}>
-          Próxima →
-        </Link>
-      ) : (
-        <span />
-      )}
-    </nav>
+    </div>
   );
+}
+
+const decimalFormat = new Intl.NumberFormat("pt-BR", {
+  maximumFractionDigits: 1,
+});
+
+function formatNumber(value: number): string {
+  return decimalFormat.format(value);
+}
+
+function formatSeconds(seconds: number | null): string {
+  if (seconds == null) return "—";
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}min`;
+
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}min`;
 }
